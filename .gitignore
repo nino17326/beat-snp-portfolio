@@ -1,0 +1,26 @@
+# Files git must NEVER track. Personal data lives outside this
+# repository (see .env.example); these rules are a second safety net.
+
+# My settings file: says where my private data folder is.
+.env
+
+# Broker exports and generated tables: always private...
+*.csv
+# ...except the synthetic demo files.
+!demo_data/**/*.csv
+
+# My real rules (holdings, theses, limits): private...
+rules.toml
+# ...except the neutral demo rules.
+!demo_data/rules.toml
+
+# Everything the scripts write (dashboard, reports, charts, CSVs),
+# also demo_data/output/.
+output/
+
+# Dated copies the lookup page makes before it edits rules.toml.
+rules_backup/
+
+# Python's automatic cache files.
+__pycache__/
+*.pyc

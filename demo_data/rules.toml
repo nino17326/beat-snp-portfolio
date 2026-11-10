@@ -1,0 +1,260 @@
+# ============================================================
+#  rules.toml - DEMO rules for the synthetic demo portfolio.
+#  Every number, level and thesis here is a neutral EXAMPLE, not
+#  advice and not anyone's real portfolio.
+#
+#  To use your own data: copy this file into your BEAT_SNP_DATA_DIR
+#  folder and edit it there (see .env.example and README.md).
+#
+#  HOW TO EDIT
+#  - Change any number after the = sign and save. That's it.
+#  - Text goes in "quotes". Numbers and dates do NOT.
+#  - Lines starting with # are notes; the scripts ignore them.
+#  - Tickers are Yahoo Finance tickers (see [securities] at the bottom).
+#  - Percentages are of HOLDINGS (cash not included - see include_cash).
+# ============================================================
+
+[portfolio]
+core_ticker = "SXR8.DE"        # the core holding: CSPX (Xetra line, SXR8)
+core_min_pct = 60              # core should be AT LEAST this % of holdings
+satellites_max_pct = 40        # everything else together: AT MOST this %
+single_stock_max_pct = 15      # any one single stock: AT MOST this %
+funds = []                     # satellites that are funds, not single stocks
+                               # (the single-stock limit doesn't apply to them)
+include_cash = false           # true = percentages are of holdings + cash
+
+# A concentration group with its own cap (the code expects this one).
+[groups.semiconductors]
+tickers = ["ASML.AS"]
+max_pct = 20
+
+[alerts]
+week_lag_points = 5            # flag a stock that lagged CSPX by more than this in 1 week
+four_week_lag_points = 10      # ... or by more than this over 4 weeks
+max_red_checks = 2             # kill rule: this many (or more) red story checks = SELL
+stale_after_days = 100         # flag a story check not updated for more than this
+estimate_cut_pct = 5           # flag if next year's EPS estimate fell more than this % in 90 days
+
+
+[calendar]
+# Macro dates typed in by hand. One line per date, inside the [ ].
+# Dates have NO quotes; labels do. Earnings dates of the holdings
+# come from Yahoo automatically.
+days_ahead = 14
+events = [
+    # Example dates - confirm on federalreserve.gov / ecb.europa.eu.
+    { date = 2026-12-09, label = "Fed rate decision" },
+    { date = 2026-12-17, label = "ECB rate decision" },
+    { date = 2027-01-27, label = "Fed rate decision" },
+    { date = 2027-02-04, label = "ECB rate decision" },
+]
+
+
+[ask]
+# Aktiesparekonto: tax on this year's gain, and the deposit ceiling.
+tax_rate = 0.17                # 17% tax on the year's gain
+cash_buffer = 1.2              # warn if cash < this x estimated tax
+ceilings = { 2025 = 135900, 2026 = 174200 }
+
+
+# ------------------------------------------------------------
+#  STOCKS - price levels and story checks (example theses)
+#  levels: alerts in the stock's OWN currency. "at_or_below" = alert
+#          when price <= that. A label starting with "Add zone" can
+#          trigger ADD in the action panel; other labels trigger REVIEW.
+#  checks: "name" = { status = "green" / "red" / "unknown", checked = YYYY-MM-DD }
+#          Use checked = "never" until the check has been done.
+# ------------------------------------------------------------
+
+[stocks."MSFT"]
+name = "Microsoft"
+thesis = "Example: cloud and software subscriptions keep compounding earnings."
+levels = [
+    { label = "Add zone", at_or_below = 450 },
+]
+
+[stocks."MSFT".checks]
+"Cloud revenue growth above 15%"   = { status = "green", checked = 2026-10-30 }
+"Operating margin stable or up"    = { status = "green", checked = 2026-10-30 }
+"Valuation vs. 5-year average"     = { status = "unknown", checked = 2026-10-30 }
+
+
+[stocks."ASML.AS"]
+name = "ASML"
+thesis = "Example: sole supplier of EUV lithography; demand follows chip-maker capex."
+levels = [
+    { label = "Add zone (only if semis risk stays under the limit)", at_or_below = 1100 },
+]
+
+[stocks."ASML.AS".checks]
+"Guidance & order book"            = { status = "green", checked = 2026-10-20 }
+"Customer capex plans"             = { status = "green", checked = 2026-10-20 }
+"Export rules unchanged"           = { status = "unknown", checked = "never" }
+
+
+[stocks."SAP.DE"]
+name = "SAP"
+thesis = "Example: shift to cloud subscriptions raises recurring revenue."
+levels = [
+    { label = "Ladder step 1", at_or_below = 190 },
+]
+
+[stocks."SAP.DE".checks]
+"Cloud backlog growth"             = { status = "green", checked = 2026-07-25 }
+"Free cash flow guidance kept"     = { status = "green", checked = 2026-07-25 }
+
+
+[stocks."DSV.CO"]
+name = "DSV"
+thesis = "Example: scale in freight forwarding; acquisitions integrated well."
+levels = [
+    { label = "Ladder step 1", at_or_below = 1300 },
+]
+
+[stocks."DSV.CO".checks]
+"Integration synergies on plan"    = { status = "green", checked = 2026-10-28 }
+"Gross profit per shipment stable" = { status = "red", checked = 2026-10-28 }
+
+
+# ------------------------------------------------------------
+#  RISK (read by risk.py and weekly_check.py)
+# ------------------------------------------------------------
+
+[risk]
+lookback_days = 365            # how much history to measure swings on
+semis_max_risk_share = 40      # warn if the semiconductors group causes more than this % of swings
+
+# Which currency each holding's UNDERLYING assets are in (not the
+# currency it trades in). One currency:  "TICKER" = "USD"
+# A mix (fractions):  "TICKER" = { EUR = 0.6, GBP = 0.4 }
+# Cash is always counted as DKK.
+[risk.currency]
+"SXR8.DE" = "USD"              # trades in EUR, but owns US stocks
+"MSFT"    = "USD"
+"NKE"     = "USD"
+"ASML.AS" = "EUR"
+"SAP.DE"  = "EUR"
+"DSV.CO"  = "DKK"
+
+# Stress-test scenarios. kinds:
+#   "group"    - every ticker in a [groups.X] group falls by shock_pct
+#   "market"   - each holding falls by shock_pct x its beta to the 'market' ticker
+#   "currency" - that currency falls vs. DKK by shock_pct
+[[risk.scenarios]]
+name = "Semis -30%"
+kind = "group"
+group = "semiconductors"
+shock_pct = -30
+
+[[risk.scenarios]]
+name = "S&P 500 -20%"
+kind = "market"
+market = "SXR8.DE"
+shock_pct = -20
+
+[[risk.scenarios]]
+name = "USD -10% vs DKK"
+kind = "currency"
+currency = "USD"
+shock_pct = -10
+
+
+# ------------------------------------------------------------
+#  SCANNER (read by scanner.py and the lookup page)
+#  Candidates that might replace a satellite one day. Information
+#  only - nothing here is a buy signal.
+#  ask_ok: can it be held in an aktiesparekonto? true / false, or
+#          "unknown" until checked on Nordnet. (Example values.)
+# ------------------------------------------------------------
+
+[scanner]
+min_market_cap_eur = 10_000_000_000   # stocks only (ETFs have no market cap)
+max_share_price_dkk = 3000            # one share must cost at most this
+max_correlation = 0.8                 # fail if it moves too much like a holding
+excluded_sectors = ["Tobacco"]
+min_score_gap = 0.15                  # one in, one out: candidate must beat the weakest by this
+max_swaps_per_quarter = 1
+new_position_pct = 7.5                # size of a new satellite, % of holdings
+max_sector_pct = 30                   # any one sector across satellites (core not counted)
+max_net_debt_ebitda_utilities = 5     # utilities: debt gate instead of free cash flow
+min_factors = 3                       # a score needs at least this many of the role's 4 factors
+min_candidate_score = 0.60            # action panel: a candidate needs at least this score to be named
+
+universe = [
+    # --- stocks ---
+    { ticker = "SIE.DE",   name = "Siemens",            type = "stock", sector = "Industrials",            role = "growth",      ask_ok = true },
+    { ticker = "SU.PA",    name = "Schneider Electric", type = "stock", sector = "Industrials",            role = "growth",      ask_ok = true },
+    { ticker = "AIR.PA",   name = "Airbus",             type = "stock", sector = "Industrials",            role = "growth",      ask_ok = true },
+    { ticker = "SAF.PA",   name = "Safran",             type = "stock", sector = "Industrials",            role = "growth",      ask_ok = true },
+    { ticker = "REN.AS",   name = "RELX",               type = "stock", sector = "Industrials",            role = "growth",      ask_ok = true },
+    { ticker = "NOVN.SW",  name = "Novartis",           type = "stock", sector = "Health Care",            role = "diversifier", ask_ok = true },
+    { ticker = "NESN.SW",  name = "Nestlé",             type = "stock", sector = "Consumer Staples",       role = "diversifier", ask_ok = true },
+    { ticker = "UNA.AS",   name = "Unilever",           type = "stock", sector = "Consumer Staples",       role = "diversifier", ask_ok = true },
+    { ticker = "OR.PA",    name = "L'Oréal",            type = "stock", sector = "Consumer Staples",       role = "diversifier", ask_ok = true },
+    { ticker = "TTE.PA",   name = "TotalEnergies",      type = "stock", sector = "Energy",                 role = "diversifier", ask_ok = true },
+    { ticker = "IBE.MC",   name = "Iberdrola",          type = "stock", sector = "Utilities",              role = "diversifier", ask_ok = true },
+    { ticker = "ALV.DE",   name = "Allianz",            type = "stock", sector = "Financials",             role = "diversifier", ask_ok = "unknown" },
+    # --- ETFs ---
+    { ticker = "IS3Q.DE",  name = "iShares Edge MSCI World Quality Factor", type = "etf", sector = "Global Quality",  role = "diversifier", ask_ok = true },
+    { ticker = "XDEM.DE",  name = "Xtrackers MSCI World Momentum",          type = "etf", sector = "Global Momentum", role = "growth",      ask_ok = true },
+]
+
+# The current satellites: role and sector (same sector labels as the
+# universe). The core (SXR8.DE) is never compared or swapped.
+[scanner.holding_roles]
+"MSFT"    = "growth"
+"ASML.AS" = "growth"
+"SAP.DE"  = "growth"
+"DSV.CO"  = "diversifier"
+
+[scanner.holding_sectors]
+"MSFT"    = "Software"
+"ASML.AS" = "Semiconductors"
+"SAP.DE"  = "Software"
+"DSV.CO"  = "Industrials"
+
+# Scoring recipe per role. Each factor is turned into a percentile rank
+# 0-1 within its role, then weighted; weights add up to 1. Lock the
+# weights (commit or note them) BEFORE looking at the results.
+#   revisions        = % change in next-FY EPS estimate over 90 days (higher = better)
+#   earnings_growth  = next-FY vs. this-FY EPS estimate, capped at +/-50% (higher = better)
+#   momentum         = 12-month return minus the last month, vs. CSPX, in DKK (higher = better)
+#   valuation        = forward P/E (lower = better)
+#   low_correlation  = weekly DKK correlation with the current portfolio (lower = better)
+#   low_volatility   = 1-year volatility in DKK (lower = better)
+[scanner.weights.growth]
+revisions = 0.30
+earnings_growth = 0.25
+momentum = 0.25
+valuation = 0.20
+
+[scanner.weights.diversifier]
+low_correlation = 0.35
+low_volatility = 0.25
+valuation = 0.20
+revisions = 0.20
+
+
+# ------------------------------------------------------------
+#  RESULTS (read by position_results.py)
+#  A second start date for the per-position comparison, e.g. the day
+#  the lead over CSPX peaked. Leave it out to use "6 months ago".
+# ------------------------------------------------------------
+
+[results]
+compare_from = 2026-03-02
+
+
+# ------------------------------------------------------------
+#  SECURITIES - which Yahoo ticker belongs to each ISIN in the
+#  Nordnet files, and the currency it trades in. Every security that
+#  appears in the transactions must be listed (also sold ones).
+# ------------------------------------------------------------
+
+[securities]
+"IE00B5BMR087" = { ticker = "SXR8.DE", currency = "EUR" }   # iShares Core S&P 500 (CSPX), Xetra
+"US5949181045" = { ticker = "MSFT",    currency = "USD" }   # Microsoft, Nasdaq
+"NL0010273215" = { ticker = "ASML.AS", currency = "EUR" }   # ASML, Amsterdam
+"DE0007164600" = { ticker = "SAP.DE",  currency = "EUR" }   # SAP, Xetra
+"DK0060079531" = { ticker = "DSV.CO",  currency = "DKK" }   # DSV, Copenhagen
+"US6541061031" = { ticker = "NKE",     currency = "USD" }   # Nike (sold in the demo)

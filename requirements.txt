@@ -1,0 +1,6 @@
+pandas
+matplotlib
+yfinance
+plotly
+streamlit
+python-dotenv
