@@ -30,7 +30,7 @@ The project is built in layers. Each one is a small Python script that reads the
 
 ## Key findings
 
-- **The broker's benchmark overstated my performance by about 7 percentage points.** Measured against a proper shadow (the same deposits, on the same days, into CSPX), the lead was much smaller than the broker's figure suggested.
+- **The broker's benchmark overstated my lead by about 7 points.** On 2026 year-to-date, the broker's comparison showed a ~11-point lead over the S&P 500; against a proper CSPX shadow in DKK the lead was ~4 points, so the broker's benchmark overstated it by about 7 points.
 - **Attribution changed the story.** One position created almost all of the lead over the index, and another erased most of it. The portfolio-level number hid both.
 - **The regime model predicts volatility, not returns.** In the walk-forward test, "stressed" periods were followed by clearly bumpier months, but *not* by worse returns. So the regime is shown as information only and never triggers a trade.
 
@@ -39,9 +39,16 @@ The project is built in layers. Each one is a small Python script that reads the
 - **Rules over opinions.** Limits, kill rules, price levels and scoring weights live in `rules.toml`. The code applies them the same way every week, and the action panel says so: *"Rule output, not advice: I decide, and I log every decision."*
 - **AI as reviewer, not decider.** AI helped write and review the code. Every rule, threshold and decision is mine.
 - **Weights locked before testing.** Scoring weights and new rules were committed *before* seeing their results, so they couldn't be tuned to look good.
-- **Data validated against the broker.** The account rebuilt from raw transactions reconciles with Nordnet's own daily value, and the time-weighted return (using the broker's convention for deposits and withdrawals) matches Nordnet's figure on all 364 days.
+- **Data validated against the broker.** The account rebuilt from raw transactions matches Nordnet's daily account value within 0.52% on every day, and the time-weighted 2026 YTD return matches Nordnet's figure (18.2% vs. 18.59%; the gap comes from data timing).
 - **Information isn't a warning.** A check with no action attached is shown as ℹ️ and never counts toward "items need attention".
 - **Private data stays out of the code.** Everything personal lives in a folder outside the repository (see below).
+
+## My role
+
+- Defined the problem and the success measure: beat CSPX in DKK, after Danish tax.
+- Wrote the investment rules, limits and kill rules.
+- Validated every layer against broker data and caught data errors: currency mismatches in EPS growth, ETFs scored on too few factors, a wrong ticker mapping.
+- Decided what to keep or reject based on out-of-sample tests (e.g. the regime model is kept as context only).
 
 ## Tech stack
 
