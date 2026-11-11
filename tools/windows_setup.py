@@ -42,8 +42,11 @@ def powershell(script):
 
 
 def shortcut(folder=None):
-    folder = q(folder) if folder else "[Environment]::GetFolderPath('Desktop')"
+    # Parentheses: without them PowerShell passes the Desktop lookup to
+    # Join-Path as plain text instead of running it.
+    folder = q(folder) if folder else "([Environment]::GetFolderPath('Desktop'))"
     out = powershell(
+        "$ErrorActionPreference = 'Stop';"
         f"$path = Join-Path {folder} 'Portfolio.lnk';"
         "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($path);"
         f"$s.TargetPath = {q(pythonw())};"
@@ -51,7 +54,9 @@ def shortcut(folder=None):
         f"$s.WorkingDirectory = {q(REPO)};"
         f"$s.IconLocation = {q(str(ICON) + ',0')};"
         "$s.Description = 'Update (if needed) and open my portfolio dashboard. Hold Shift to force an update.';"
-        "$s.Save(); $path")
+        "$s.Save(); if (-not (Test-Path -LiteralPath $path)) { throw 'the shortcut was not saved' }; $path")
+    if not out:
+        raise SystemExit("The shortcut could not be created (PowerShell gave no path).")
     print(f"Created: {out}")
     print("Double-click it to open the dashboard (hold Shift while starting it to force an update).")
 
