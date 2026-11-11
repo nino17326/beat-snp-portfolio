@@ -75,10 +75,7 @@ def _safe(ticker):
 
 def _write(path, text):
     """Write a file atomically (a crash never leaves half a file)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    settings.write_text_safely(path, text)
 
 
 def _read_json(path, default=None):

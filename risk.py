@@ -22,6 +22,7 @@ from portfolio import danish
 from shadow_portfolio import read_export, combine, account_returns, signed
 from positions import load_account, SECURITIES, OUTPUT_FOLDER
 from settings import RULES_FILE, HISTORY_FILES, data_files     # rules.toml is in the data folder
+from settings import write_text_safely, save_figure_safely   # crash-safe writes (temp file, then rename)
 
 INFO, OK, WARN = "ℹ️", "✅", "⚠️"
 
@@ -214,7 +215,7 @@ def draw_chart(table, save_to):
     ax.legend(loc="lower right")
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
-    fig.savefig(save_to, dpi=150)
+    save_figure_safely(fig, save_to, dpi=150)
     print(f"\nChart saved to: {save_to}")
     plt.show()
 
@@ -284,7 +285,7 @@ def main():
                    for n, l, p in stress_tests(values, cash_now, returns, rules)],
         "drawdown": {k: (f"{v:%Y-%m-%d}" if isinstance(v, pd.Timestamp) else float(v)) for k, v in dd.items()},
     }
-    (OUTPUT_FOLDER / "risk_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    write_text_safely(OUTPUT_FOLDER / "risk_summary.json", json.dumps(summary, indent=2))
 
     draw_chart(table, OUTPUT_FOLDER / "risk_vs_money.png")
 

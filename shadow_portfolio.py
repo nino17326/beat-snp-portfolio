@@ -31,6 +31,7 @@ from portfolio import danish
 # --- Settings -------------------------------------------------
 # Where the Nordnet files are and where results go: see settings.py.
 from settings import DATA_FOLDER, OUTPUT_FOLDER, HISTORY_FILES, data_files
+from settings import write_text_safely, save_csv_safely, save_figure_safely   # crash-safe writes
 
 BENCHMARK_TICKER = "SXR8.DE"   # iShares Core S&P 500 UCITS ETF on Xetra (priced in EUR)
 FX_TICKER = "EURDKK=X"         # how many DKK one EUR costs
@@ -273,7 +274,7 @@ def draw_chart(h, save_to):
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(save_to, dpi=150)
+    save_figure_safely(fig, save_to, dpi=150)
     print(f"Chart saved to: {save_to}")
     plt.show()     # opens a window with the chart; close it to finish
 
@@ -310,7 +311,7 @@ def main():
     OUTPUT_FOLDER.mkdir(exist_ok=True)
     csv_path = OUTPUT_FOLDER / "shadow_comparison.csv"
     # sep=";" and decimal="," make Danish Excel open it correctly.
-    h.to_csv(csv_path, sep=";", decimal=",", index=False, encoding="utf-8-sig")
+    save_csv_safely(h, csv_path, sep=";", decimal=",", index=False, encoding="utf-8-sig")
     print(f"Full table saved to: {csv_path}")
 
     # The headline numbers, for dashboard.py (so it never recalculates them).
@@ -322,7 +323,7 @@ def main():
                "difference_pct": float(last["difference_pct"]),
                "my_since_start": float(my_start), "my_ytd": float(my_ytd),
                "shadow_since_start": float(sh_start), "shadow_ytd": float(sh_ytd)}
-    (OUTPUT_FOLDER / "shadow_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    write_text_safely(OUTPUT_FOLDER / "shadow_summary.json", json.dumps(summary, indent=2))
 
     draw_chart(h, OUTPUT_FOLDER / "shadow_vs_real.png")
 

@@ -33,6 +33,8 @@ from positions import OUTPUT_FOLDER
 from settings import DEMO                    # True = running on the synthetic demo_data
 from scan_core import EXPLAIN, LOOKUP_URL as LOOKUP_PAGE, lookup_link   # shared texts + lookup links
 from data_cache import price_status          # which closes the prices are, offline or not
+import checks                                # rules.toml + Nordnet export checks
+from settings import write_text_safely   # crash-safe writes (temp file, then rename)
 
 DASHBOARD = OUTPUT_FOLDER / "dashboard.html"
 STATUS = {"✅": "ok", "⚠️": "warn", "ℹ️": "info", "❌": "bad"}
@@ -314,6 +316,21 @@ def action_panel(acts):
 
 # --- Build the page -------------------------------------------
 
+def checks_banner():
+    """⚠️/ℹ️ about rules.toml and the Nordnet files (checks.py), at the very top."""
+    try:
+        rules_problems, export_problems = checks.check_everything()
+    except Exception as e:                       # noqa: BLE001 - the dashboard must still build
+        return items([f"- ⚠️ The file checks couldn't run ({type(e).__name__}: {e})"])
+    lines = []
+    for p in rules_problems + export_problems:
+        where = f"rules.toml line {p['line']}: " if p.get("line") else ""
+        fix = f" (fix: {p['fix']})" if p.get("fix") else ""
+        level = "⚠️" if p["level"] == checks.ERROR else p["level"]
+        lines.append(f"- {level} {where}{p['text']}{fix}")
+    return f'<div class="checks">{items(lines)}</div>' if lines else ""
+
+
 def build():
     shadow = read_json("shadow_summary.json")
     risk = read_json("risk_summary.json")
@@ -359,7 +376,8 @@ def build():
                    if report_text else missing("weekly report", "weekly_check.py"))
 
     body = (
-        action_panel(acts)
+        checks_banner()
+        + action_panel(acts)
         + kpis(shadow, risk, warnings)
         + '<div class="grid">'
         + card("My account vs. CSPX shadow", chart_account(account) if account is not None
@@ -386,7 +404,7 @@ def build():
 
     page = PAGE.format(plotly=get_plotlyjs(), data_line=data_line, body=body, lookup=LOOKUP_URL,
                        built=datetime.now().strftime("%Y-%m-%d %H:%M"))
-    DASHBOARD.write_text(page, encoding="utf-8")
+    write_text_safely(DASHBOARD, page)
     return DASHBOARD
 
 

@@ -27,6 +27,7 @@ from portfolio import danish
 from shadow_portfolio import download_close
 from positions import OUTPUT_FOLDER
 import data_cache
+from settings import save_csv_safely, save_figure_safely   # crash-safe writes (temp file, then rename)
 
 # Fitted models are saved here and only refitted when a new month starts.
 # Bump CACHE_VERSION whenever the model or the features change.
@@ -343,7 +344,7 @@ def draw_chart(close, regimes, save_to):
     ax.legend(handles=[Patch(color=COLOURS[l], alpha=0.4, label=l) for l in LABELS], loc="upper left")
     ax.grid(alpha=0.3)
     fig.tight_layout()
-    fig.savefig(save_to, dpi=150)
+    save_figure_safely(fig, save_to, dpi=150)
     print(f"\nChart saved to: {save_to}")
     plt.show()
 
@@ -384,13 +385,13 @@ def main():
 
         for method, table in [("HMM", hmm), ("simple rule", simple)]:
             all_tables.append(table.assign(market=name, method=method))
-        regimes.to_csv(OUTPUT_FOLDER / f"regime_history_{ticker.strip('^')}.csv",
-                       sep=";", decimal=",", encoding="utf-8-sig", index_label="date")
+        save_csv_safely(regimes, OUTPUT_FOLDER / f"regime_history_{ticker.strip('^')}.csv",
+                        sep=";", decimal=",", encoding="utf-8-sig", index_label="date")
         if ticker == "^GSPC":
             sp_close, sp_regimes = close, regimes
 
-    pd.concat(all_tables).to_csv(OUTPUT_FOLDER / "regime_test.csv", sep=";", decimal=",",
-                                 encoding="utf-8-sig", index_label="group")
+    save_csv_safely(pd.concat(all_tables), OUTPUT_FOLDER / "regime_test.csv", sep=";", decimal=",",
+                    encoding="utf-8-sig", index_label="group")
     draw_chart(sp_close, sp_regimes, OUTPUT_FOLDER / "regime_sp500.png")
 
 

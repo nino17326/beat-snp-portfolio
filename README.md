@@ -78,6 +78,8 @@ To look up a single ticker, double-click `Start lookup.bat` and use the search b
 
 All Yahoo data (prices, FX, company info, estimates) goes through `data_cache.py` and is saved in `cache\` in the data folder: a run only downloads the days that are missing, company data refreshes once a day, and if Yahoo is unreachable the saved prices are used and the dashboard says so.
 
+Before anything runs, `checks.py` validates `rules.toml` (missing sections, wrong types such as `"true"` in quotes, ticker endings, duplicates) and stops with the line number and the fix, and it checks the exports: new holdings that aren't set up, older transaction exports, duplicate or stale files. Every output and every `rules.toml` edit is written to a temporary file first and then swapped in, so a crash can't leave a half-written file.
+
 `.env`, CSVs, your `rules.toml`, `output\`, `cache\` and `rules_backup\` are all in `.gitignore`.
 
 ## What I'd do next

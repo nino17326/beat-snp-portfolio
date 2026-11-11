@@ -23,6 +23,7 @@ import data_cache
 
 from portfolio import danish
 from positions import SECURITIES, OUTPUT_FOLDER
+from settings import write_text_safely, save_csv_safely   # crash-safe writes (temp file, then rename)
 from scan_core import (PASS, FAIL, INFO, SKIP, SCANNER_FX, GATE_ORDER, EARNINGS_GROWTH_CAP, EXPLAIN,
                        load_rules, load_context, portfolio_weekly, fetch, fx_to_dkk, run_gates,
                        verdict, fit_for, raw_factors, score_role, score_text, eligible_candidates,
@@ -92,7 +93,7 @@ def save_latest(table, holdings, verdicts, swaps_left, today, watchlist=()):
     summary["watchlist"] = list(watchlist)
     path = OUTPUT_FOLDER / "scanner" / "latest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_text_safely(path, json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 def one_in_one_out(table, holdings, rules, swaps_left):
@@ -157,7 +158,7 @@ def save_markdown(table, order, today, path, extra=()):
                      + f" | {r['Fit']} | {score_text(r['score'], r['star'])} | {r['verdict']} | {'; '.join(notes)} |")
     lines += ["", summary_line(table), "", *extra]
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_safely(path, "\n".join(lines) + "\n")
 
 
 def summary_line(table):
@@ -233,8 +234,8 @@ def main():
     # (the lookup page also ranks a new ticker against this file).
     (OUTPUT_FOLDER / "scanner").mkdir(parents=True, exist_ok=True)
     raw.assign(role=pd.Series(roles_of), score=scores, missing=stars).sort_values(["role", "score"]) \
-       .to_csv(OUTPUT_FOLDER / "scanner" / f"factors_{today:%Y-%m-%d}.csv",
-               sep=";", decimal=",", encoding="utf-8-sig", index_label="ticker")
+       .pipe(save_csv_safely, OUTPUT_FOLDER / "scanner" / f"factors_{today:%Y-%m-%d}.csv",
+             sep=";", decimal=",", encoding="utf-8-sig", index_label="ticker")
 
     holdings = pd.DataFrame([{"ticker": tk, "role": role, "score": scores.get(tk, float("nan")),
                               "star": bool(stars.get(tk, False))} for tk, role in my_satellites.items()])

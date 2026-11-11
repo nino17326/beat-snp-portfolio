@@ -66,12 +66,58 @@ def newest_data_file(pattern):
     return max(files, key=lambda f: f.stat().st_mtime)
 
 
-def load_rules():
-    """rules.toml from the data folder, as a dictionary."""
+_checked = {}       # rules.toml text -> already checked in this process
+
+
+def load_rules(check=True):
+    """rules.toml from the data folder, as a dictionary.
+    check=True: first validate it (checks.py). Problems that would break a
+    script stop it with a plain-English message (line number + fix)
+    instead of a crash later on; warnings are printed once.
+    run_all.py already checked and printed everything, so its steps
+    (BEAT_SNP_CHECKED=1) stay quiet unless there is an error."""
     if not RULES_FILE.exists():
         raise SystemExit(f"No rules.toml in {DATA_FOLDER} - copy demo_data\\rules.toml there and edit it")
-    with open(RULES_FILE, "rb") as f:
-        return tomllib.load(f)
+    text = RULES_FILE.read_text(encoding="utf-8")
+    if check and text not in _checked:
+        import checks                                   # here: checks.py imports settings
+        problems = checks.check_rules_text(text)
+        _checked[text] = True
+        if any(p["level"] == checks.ERROR for p in problems):
+            raise checks.RulesError(checks.rules_report(problems))
+        if problems and os.environ.get("BEAT_SNP_CHECKED") != "1":
+            print(checks.rules_report(problems))
+    return tomllib.loads(text)
+
+
+# --- Safe writing ---------------------------------------------
+# Every output (and every rules.toml edit) is written to a temporary file
+# next to the real one first, then swapped in with one rename. A crash
+# halfway can then only leave the temporary file, never a half-written
+# original.
+
+def _temporary(path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path.with_name(f".{path.stem}.writing{path.suffix}")   # same folder, same extension
+
+
+def write_text_safely(path, text, encoding="utf-8"):
+    tmp = _temporary(path)
+    tmp.write_text(text, encoding=encoding)
+    os.replace(tmp, path)
+
+
+def save_csv_safely(table, path, **options):
+    tmp = _temporary(path)
+    table.to_csv(tmp, **options)
+    os.replace(tmp, path)
+
+
+def save_figure_safely(fig, path, **options):
+    tmp = _temporary(path)                              # keeps .png, so the format is right
+    fig.savefig(tmp, **options)
+    os.replace(tmp, path)
 
 
 def where():

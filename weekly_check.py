@@ -29,6 +29,7 @@ from positions import load_account, SECURITIES, OUTPUT_FOLDER
 from regime import current_regime, MARKETS
 from risk import summary_lines as risk_summary, risk_numbers, semis_risk_after
 from settings import RULES_FILE, HISTORY_FILES, data_files     # rules.toml is in the data folder
+from settings import write_text_safely                         # crash-safe writes (temp file, then rename)
 
 WEEKLY_FOLDER = OUTPUT_FOLDER / "weekly"
 OK, WARN, INFO = "✅", "⚠️", "ℹ️"   # INFO = no action attached, never counted
@@ -598,7 +599,7 @@ def action_lines(portfolio, actions):
 def save_actions(portfolio, actions, today):
     """output/actions.json - the dashboard reads this file."""
     data = {"date": f"{today:%Y-%m-%d}", "note": ACTIONS_NOTE, "portfolio": portfolio, "holdings": actions}
-    (OUTPUT_FOLDER / "actions.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_text_safely(OUTPUT_FOLDER / "actions.json", json.dumps(data, ensure_ascii=False, indent=2))
 
 
 # --- The main program -----------------------------------------
@@ -678,7 +679,7 @@ def main():
 
     WEEKLY_FOLDER.mkdir(parents=True, exist_ok=True)
     path = WEEKLY_FOLDER / f"{today:%Y-%m-%d}.md"
-    path.write_text(report + "\n", encoding="utf-8")
+    write_text_safely(path, report + "\n")
     print(f"\nSaved to: {path}")
 
 

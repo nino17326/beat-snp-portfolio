@@ -18,10 +18,12 @@ import pandas as pd
 from portfolio import danish
 from shadow_portfolio import read_export, combine, download_close
 import data_cache
+from checks import pick_transactions_file
 # Paths and file patterns live in settings.py (see BEAT_SNP_DATA_DIR).
 # OUTPUT_FOLDER and DATA_FOLDER are re-exported here for the other scripts.
 from settings import (DATA_FOLDER, OUTPUT_FOLDER, HISTORY_FILES, TRANSACTIONS_FILES,
                       data_files, newest_data_file, load_rules)
+from settings import save_csv_safely   # crash-safe writes (temp file, then rename)
 
 
 # --- Settings -------------------------------------------------
@@ -164,7 +166,9 @@ def load_account(last_day=None):
     last_day=None -> stop at the newest date in the Nordnet files.
     last_day=a date -> carry on up to that date (e.g. today).
     """
-    t = read_transactions(newest_data_file(TRANSACTIONS_FILES))
+    # Each transaction export holds the full history: use the newest one
+    # (older ones are listed as ℹ️ by checks.py / the dashboard).
+    t = read_transactions(pick_transactions_file()[0])
     first_day = t["date"].min()
     history_files = data_files(HISTORY_FILES)
     if last_day is None:
@@ -175,9 +179,16 @@ def load_account(last_day=None):
     shares = rebuild_shares(t, days)
     cash = rebuild_cash(t, days)
 
+    # A security that isn't in [securities] yet (e.g. a new holding) can't be
+    # priced: leave it out instead of stopping. The dashboard shows a ⚠️
+    # "New holding ... isn't set up" (checks.py), and the account value is
+    # too low until it's added.
     missing = [i for i in shares.columns if i not in SECURITIES]
     if missing:
-        raise SystemExit(f"No Yahoo ticker for these ISINs - add them to [securities] in rules.toml: {missing}")
+        names = t.dropna(subset=["ISIN"]).groupby("ISIN")["Værdipapirer"].first()
+        print("WARNING: not set up in rules.toml [securities], left out of the values: "
+              + ", ".join(f"{names.get(i, i)} ({i})" for i in missing))
+        shares = shares.drop(columns=missing)
 
     prices = download_prices_dkk(shares.columns, first_day, last_day)
     return t, shares, cash, prices
@@ -215,8 +226,8 @@ def main():
 
     OUTPUT_FOLDER.mkdir(exist_ok=True)
     out = values.rename(columns=lambda i: SECURITIES[i][0]).assign(cash=cash, total=total)
-    out.to_csv(OUTPUT_FOLDER / "positions_daily.csv", sep=";", decimal=",",
-               encoding="utf-8-sig", index_label="date")
+    save_csv_safely(out, OUTPUT_FOLDER / "positions_daily.csv", sep=";", decimal=",",
+                    encoding="utf-8-sig", index_label="date")
     print(f"\nDaily values per position saved to: {OUTPUT_FOLDER / 'positions_daily.csv'}")
 
 

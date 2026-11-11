@@ -34,6 +34,7 @@ four_week_lag_points = 10      # ... or by more than this over 4 weeks
 max_red_checks = 2             # kill rule: this many (or more) red story checks = SELL
 stale_after_days = 100         # flag a story check not updated for more than this
 estimate_cut_pct = 5           # flag if next year's EPS estimate fell more than this % in 90 days
+max_export_age_days = 35       # warn if the Daglig udvikling export is older than this (days)
 
 
 [calendar]
@@ -56,6 +57,15 @@ tax_rate = 0.17                # 17% tax on the year's gain
 cash_buffer = 1.2              # warn if cash < this x estimated tax
 ceilings = { 2025 = 135900, 2026 = 174200 }
 
+
+# Trading costs the lookup page uses for "Trading cost" (assumed Nordnet DK
+# rates - check Nordnet's current price list and adjust).
+[costs]
+commission_pct = 0.15          # foreign markets: % of the trade ...
+commission_min_dkk = 39        # ... but at least this many DKK
+commission_pct_dk = 0.10       # Copenhagen (.CO): % of the trade ...
+commission_min_dkk_dk = 29     # ... but at least this many DKK
+fx_pct = 0.25                  # currency exchange, % each way
 
 # ------------------------------------------------------------
 #  STOCKS - price levels and story checks (example theses)

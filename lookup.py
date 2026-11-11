@@ -33,7 +33,20 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # so the project's own modules import
-from portfolio import danish
+
+# Check rules.toml BEFORE the project modules load (they read it on import):
+# a broken file shows the plain-English problems here instead of a crash.
+import settings                                             # noqa: E402
+from checks import RulesError                               # noqa: E402
+try:
+    settings.load_rules()
+except RulesError as _e:
+    st.set_page_config(page_title="Ticker lookup", page_icon="🔎", layout="centered")
+    st.error("rules.toml has problems, so the lookup can't run. Fix these lines and reload the page.")
+    st.code(str(_e), language=None)
+    st.stop()
+
+from portfolio import danish                                # noqa: E402
 from positions import SECURITIES, OUTPUT_FOLDER
 from settings import BACKUP_FOLDER
 from scan_core import (PASS, FAIL, INFO, SKIP, WARN, GATE_ORDER, RULES_FILE, EXPLAIN, load_rules,
@@ -42,6 +55,7 @@ from scan_core import (PASS, FAIL, INFO, SKIP, WARN, GATE_ORDER, RULES_FILE, EXP
                        raw_factors, rank_with_latest, score_text, head_to_head, comparison_rows,
                        verdict_parts, term_tip)
 from weekly_check import valuation, estimate_revisions, story_status
+from settings import write_text_safely   # crash-safe writes (temp file, then rename)
 
 # Yahoo's sector names -> the labels I use in rules.toml.
 YAHOO_SECTOR = {"Healthcare": "Health Care", "Consumer Defensive": "Consumer Staples",
@@ -112,7 +126,7 @@ def backup_and_save(old_text, new_text, ticker, where):
     BACKUP_FOLDER.mkdir(exist_ok=True)
     backup = BACKUP_FOLDER / f"rules_{datetime.now():%Y-%m-%d_%H%M%S}.toml"
     shutil.copy2(RULES_FILE, backup)                             # copy BEFORE writing
-    RULES_FILE.write_text(new_text, encoding="utf-8")
+    write_text_safely(RULES_FILE, new_text)       # temp file first, then swapped in
     return backup
 
 
@@ -279,7 +293,7 @@ st.caption("Checks one ticker against my rules - the same gates, fit check and s
 st.markdown(f"**Legend:** {EXPLAIN['legend']}")
 
 q = st.query_params
-rules = load_rules()
+rules = load_rules()                                             # already validated at the top
 mode_label = st.radio("Mode", list(MODES.values()), horizontal=True,
                       index=1 if q.get("mode") == "replace" else 0)
 mode = next(k for k, v in MODES.items() if v == mode_label)

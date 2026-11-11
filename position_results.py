@@ -20,6 +20,7 @@ from matplotlib.ticker import FuncFormatter
 from portfolio import danish
 from positions import load_account, SECURITIES, OUTPUT_FOLDER
 from settings import load_rules
+from settings import save_csv_safely, save_figure_safely   # crash-safe writes (temp file, then rename)
 
 RULES = load_rules()
 CORE_TICKER = RULES["portfolio"]["core_ticker"]                  # CSPX (e.g. SXR8.DE)
@@ -172,7 +173,7 @@ def draw_chart(total, since_peak, start, save_to):
     axes[0].legend(loc="lower right")
     fig.suptitle("Profit per position vs. buying CSPX instead")
     fig.tight_layout()
-    fig.savefig(save_to, dpi=150)
+    save_figure_safely(fig, save_to, dpi=150)
     print(f"\nChart saved to: {save_to}")
     plt.show()
 
@@ -207,8 +208,8 @@ def main():
 
     OUTPUT_FOLDER.mkdir(exist_ok=True)
     for table, name in [(total, "positions_total.csv"), (since_peak, "positions_since_peak.csv")]:
-        table.to_csv(OUTPUT_FOLDER / name, sep=";", decimal=",", encoding="utf-8-sig",
-                     index_label="position")
+        save_csv_safely(table, OUTPUT_FOLDER / name, sep=";", decimal=",", encoding="utf-8-sig",
+                        index_label="position")
     draw_chart(total, since_peak, start, OUTPUT_FOLDER / "positions_vs_cspx.png")
 
 
