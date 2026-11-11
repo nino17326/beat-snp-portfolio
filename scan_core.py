@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 
 import pandas as pd
 import data_cache                                # Yahoo data, saved locally
+import lookup_server                             # which port the lookup page runs on
 
 from portfolio import danish
 from shadow_portfolio import download_close
@@ -198,7 +199,9 @@ def lookup_link(ticker, role=None, mode=None, out=None, ask=None):
 RULES_FILE = settings.RULES_FILE
 PASS, FAIL, INFO, SKIP = "✅", "❌", "ℹ️", "–"
 WARN = "⚠️"                  # allowed, but worth noticing
-LOOKUP_URL = "http://localhost:8501/"   # the lookup page (lookup.py, via 'Start lookup.bat')
+# The lookup page (lookup.py). Its port is 8501 unless that was taken, see
+# lookup_server.py, which saves the port it really uses.
+LOOKUP_URL = f"http://localhost:{lookup_server.saved_port()}/"
 PAUSE_SECONDS = 0.5          # be polite to Yahoo: short pause between requests
 CAP_MISMATCH_PCT = 25        # flag if market cap and price x shares differ by more
 GATE_ORDER = ["Yahoo", "Cap", "EPS", "FCF", "Debt", "Price", "Sector", "Corr", "ASK"]

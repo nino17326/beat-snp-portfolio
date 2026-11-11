@@ -74,7 +74,13 @@ With no setup it runs on **`demo_data\`**: a synthetic portfolio (CSPX plus 5 st
 4. Copy `.env.example` to `.env` and set `BEAT_SNP_DATA_DIR=` to that folder.
 5. Run `py run_all.py`. Everything the scripts write goes to `output\` inside your data folder.
 
-To look up a single ticker, double-click `Start lookup.bat` and use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
+### One click
+
+Run `install_shortcut.bat` once: it puts a **Portfolio** icon on your Desktop. Double-clicking it opens the dashboard straight away if today's data is already there; otherwise a small window shows "Updating your portfolio…" with the current step, and the dashboard opens when it's done (hold Shift while starting it to force an update). Only one update ever runs at a time, a failed step is shown at the top of the dashboard with the time its data was last good, and `outputun.log` keeps a timestamped log of the last 10 runs. `install_weekly_update.bat` adds a Windows task that updates every Monday at 07:30 (catching up if the PC was off) and shows a notification; `remove_weekly_update.bat` removes it.
+
+The lookup page starts by itself, hidden, at the end of every update (`Start lookup.bat` / `Stop lookup.bat` do it by hand). It uses port 8501, or the next free port if something else has 8501, and the dashboard's search box follows it.
+
+To look up a single ticker, use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
 
 All Yahoo data (prices, FX, company info, estimates) goes through `data_cache.py` and is saved in `cache\` in the data folder: a run only downloads the days that are missing, company data refreshes once a day, and if Yahoo is unreachable the saved prices are used and the dashboard says so.
 

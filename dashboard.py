@@ -34,6 +34,7 @@ from settings import DEMO                    # True = running on the synthetic d
 from scan_core import EXPLAIN, LOOKUP_URL as LOOKUP_PAGE, lookup_link   # shared texts + lookup links
 from data_cache import price_status          # which closes the prices are, offline or not
 import checks                                # rules.toml + Nordnet export checks
+import procs                                 # update step results (steps.json)
 from settings import write_text_safely   # crash-safe writes (temp file, then rename)
 
 DASHBOARD = OUTPUT_FOLDER / "dashboard.html"
@@ -266,6 +267,35 @@ def scanner_body(scan):
 LOOKUP_URL = LOOKUP_PAGE + "?ticker="     # the lookup page (lookup.py, via 'Start lookup.bat')
 
 
+# Every link to the lookup page goes through openLookup(): it first checks
+# that the lookup answers (by loading its small icon), so a stopped lookup
+# shows a clear message instead of the browser's "can't connect" page.
+LOOKUP_JS = """
+var LOOKUP_BASE = '@BASE@';
+function lookupDown() {
+  var b = document.getElementById('lookup-down');
+  if (b) { b.style.display = 'block'; }
+}
+function openLookup(url) {
+  var w = window.open('about:blank', '_blank');      // opened now, so pop-up blockers allow it
+  var done = false, img = new Image();
+  function finish(ok) {
+    if (done) { return; } done = true;
+    if (ok) { if (w) { w.location = url; } else { window.location = url; } }
+    else { if (w) { w.close(); } lookupDown(); }
+  }
+  img.onload = function () { finish(true); };
+  img.onerror = function () { finish(false); };
+  setTimeout(function () { finish(false); }, 3000);
+  img.src = LOOKUP_BASE + 'favicon.png?t=' + Date.now();
+}
+document.addEventListener('click', function (e) {
+  var a = e.target.closest ? e.target.closest('a') : null;
+  if (a && a.href && a.href.indexOf(LOOKUP_BASE) === 0) { e.preventDefault(); openLookup(a.href); }
+});
+"""
+
+
 def explain_a(url):
     """A small 'explain' link to the full explained fit check on the lookup page."""
     return (f" <a class='small' href='{html.escape(url)}' target='_blank' "
@@ -315,6 +345,24 @@ def action_panel(acts):
 
 
 # --- Build the page -------------------------------------------
+
+STEP_PART = {"shadow_portfolio.py": "account vs. CSPX numbers and chart", "regime.py": "market regime",
+             "scanner.py": "scanner", "weekly_check.py": "weekly report and actions", "risk.py": "risk",
+             "dashboard.py": "dashboard"}
+
+
+def failed_steps_banner():
+    """⚠️ for each update step that failed last time, and when its part of
+    the data was last good (output/steps.json, written by run_all.py)."""
+    lines = []
+    for script, s in procs.read_steps().items():
+        if s.get("ok") is False:
+            good = (f"it shows data from the last good run, {s['last_good']}" if s.get("last_good")
+                    else "there is no good run of it yet")
+            lines.append(f"- ⚠️ Update step {script} ({STEP_PART.get(script, script)}) failed on "
+                         f"{s['last_run']}: {good}. Details in output/run.log")
+    return items(lines)
+
 
 def checks_banner():
     """⚠️/ℹ️ about rules.toml and the Nordnet files (checks.py), at the very top."""
@@ -377,6 +425,7 @@ def build():
 
     body = (
         checks_banner()
+        + failed_steps_banner()
         + action_panel(acts)
         + kpis(shadow, risk, warnings)
         + '<div class="grid">'
@@ -403,6 +452,7 @@ def build():
     )
 
     page = PAGE.format(plotly=get_plotlyjs(), data_line=data_line, body=body, lookup=LOOKUP_URL,
+                       lookup_js=LOOKUP_JS.replace("@BASE@", LOOKUP_PAGE),
                        built=datetime.now().strftime("%Y-%m-%d %H:%M"))
     write_text_safely(DASHBOARD, page)
     return DASHBOARD
@@ -470,15 +520,18 @@ header .top {{ display:flex; justify-content:space-between; align-items:flex-sta
 .search .small {{ flex-basis:100%; }}
 .demo {{ background:#f9a825; color:#3e2c00; font-weight:700; padding:1px 6px; border-radius:4px; margin-right:4px; }}
 .offline {{ color:#b45309; font-weight:600; }}
+.lookup-down {{ margin-top:6px; padding:6px 10px; border-radius:6px; background:#fff4e5; color:#7a4100; font-weight:600; }}
 @media (max-width: 900px) {{ .grid, .roles {{ grid-template-columns:1fr; }} }}
 </style></head>
 <body>
 <header><div class="top">
 <div><h1>Portfolio dashboard</h1>
 <div class="data">Data from: {data_line} · page built {built}</div></div>
-<form class="search" onsubmit="var t=this.q.value.trim(); if (t) {{ window.open('{lookup}' + encodeURIComponent(t), '_blank'); }} return false;">
+<form class="search" onsubmit="var t=this.q.value.trim(); if (t) {{ openLookup('{lookup}' + encodeURIComponent(t)); }} return false;">
 <input name="q" placeholder="Look up a ticker, e.g. SAF.PA" autocomplete="off"><button type="submit">Look up</button>
-<div class="small">Double-click 'Start lookup' first</div></form>
+<div class="small">The lookup starts by itself with every update</div>
+<div id="lookup-down" class="lookup-down" style="display:none">⚠️ Lookup isn't running: click the Portfolio icon again</div></form>
+<script>{lookup_js}</script>
 </div></header>
 <main>{body}</main>
 </body></html>
