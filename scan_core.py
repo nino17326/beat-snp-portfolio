@@ -15,7 +15,7 @@ import tomllib
 from urllib.parse import urlencode
 
 import pandas as pd
-import yfinance as yf
+import data_cache                                # Yahoo data, saved locally
 
 from portfolio import danish
 from shadow_portfolio import download_close
@@ -254,12 +254,15 @@ def fetch(ticker, attempts=2):
 
 
 def _fetch_once(ticker):
-    t = yf.Ticker(ticker)
-    info = t.info or {}
-    closes = t.history(period="2y", auto_adjust=False)["Close"]   # 2y: momentum needs 12 months back
+    info = data_cache.info(ticker)                       # refreshed once a day
+    if not info:                                         # offline and nothing saved yet
+        raise ValueError("no company info (Yahoo unreachable and nothing saved yet)")
+    try:                                                 # 2y: momentum needs 12 months back
+        closes = data_cache.closes(ticker, pd.Timestamp.today().normalize() - pd.DateOffset(years=2))
+    except LookupError:
+        closes = pd.Series(dtype=float)
     if closes.empty and not info.get("quoteType"):
         raise ValueError("no data on Yahoo")
-    closes.index = closes.index.tz_localize(None).normalize()
 
     currency = info.get("currency")
     last_price = closes.iloc[-1] if len(closes) else info.get("regularMarketPrice")
@@ -299,7 +302,6 @@ def fx_to_dkk(currencies, days):
             print(f"  No FX ticker for {cur} - candidates in {cur} get ℹ️ for price checks")
             continue
         rates[cur] = fill_every_day(download_close(SCANNER_FX[cur], start, end), days)
-        time.sleep(PAUSE_SECONDS)
     return rates
 
 

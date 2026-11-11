@@ -16,13 +16,14 @@
 import json
 import re
 import sys
-import time
 
 import pandas as pd
 
+import data_cache
+
 from portfolio import danish
 from positions import SECURITIES, OUTPUT_FOLDER
-from scan_core import (PASS, FAIL, INFO, SKIP, PAUSE_SECONDS, GATE_ORDER, EARNINGS_GROWTH_CAP, EXPLAIN,
+from scan_core import (PASS, FAIL, INFO, SKIP, SCANNER_FX, GATE_ORDER, EARNINGS_GROWTH_CAP, EXPLAIN,
                        load_rules, load_context, portfolio_weekly, fetch, fx_to_dkk, run_gates,
                        verdict, fit_for, raw_factors, score_role, score_text, eligible_candidates,
                        lookup_link)
@@ -181,14 +182,17 @@ def main():
 
     # Fetch every candidate (and watchlist name); one failure must not stop the rest.
     data, errors = {}, []
-    print(f"Fetching {len(universe)} candidates and {len(watchlist)} watchlist names from Yahoo ...")
+    print(f"Fetching {len(universe)} candidates and {len(watchlist)} watchlist names (cache first) ...")
+    # Prices for every candidate, my satellites and the exchange rates, in a few batched requests.
+    data_cache.prefetch([c["ticker"] for c in list(universe) + list(watchlist)]
+                        + list(rules["scanner"]["holding_roles"]) + list(SCANNER_FX.values()),
+                        today - pd.DateOffset(years=2))
     for c in list(universe) + list(watchlist):
         try:
             data[c["ticker"]] = fetch(c["ticker"])
         except Exception as e:
             data[c["ticker"]] = None
             errors.append(f"{c['ticker']}: {type(e).__name__}: {e}")
-        time.sleep(PAUSE_SECONDS)
 
     fx = fx_to_dkk([d["currency"] for d in data.values() if d], ctx["days"])
 
@@ -206,7 +210,6 @@ def main():
         if d is not None:
             raw_rows[c["ticker"]] = raw_factors(c["ticker"], d, d.get("daily_dkk"),
                                                 holdings_daily[core], portfolio_weekly(ctx), today)
-            time.sleep(PAUSE_SECONDS)
     my_satellites = {tk: role for tk, role in rules["scanner"]["holding_roles"].items()
                      if tk in values.index}
     for tk, role in my_satellites.items():
@@ -218,7 +221,6 @@ def main():
         roles_of[tk] = role
         raw_rows[tk] = raw_factors(tk, d, holdings_daily[tk], holdings_daily[core],
                                    portfolio_weekly(ctx, exclude=tk), today)
-        time.sleep(PAUSE_SECONDS)
 
     raw = pd.DataFrame(raw_rows).T
     scores, stars = pd.Series(dtype=float), pd.Series(dtype=bool)

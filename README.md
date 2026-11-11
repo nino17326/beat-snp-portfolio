@@ -76,7 +76,9 @@ With no setup it runs on **`demo_data\`**: a synthetic portfolio (CSPX plus 5 st
 
 To look up a single ticker, double-click `Start lookup.bat` and use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
 
-`.env`, CSVs, your `rules.toml`, `output\` and `rules_backup\` are all in `.gitignore`.
+All Yahoo data (prices, FX, company info, estimates) goes through `data_cache.py` and is saved in `cache\` in the data folder: a run only downloads the days that are missing, company data refreshes once a day, and if Yahoo is unreachable the saved prices are used and the dashboard says so.
+
+`.env`, CSVs, your `rules.toml`, `output\`, `cache\` and `rules_backup\` are all in `.gitignore`.
 
 ## What I'd do next
 

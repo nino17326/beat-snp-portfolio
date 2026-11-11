@@ -24,3 +24,10 @@ rules_backup/
 # Python's automatic cache files.
 __pycache__/
 *.pyc
+
+# Downloaded Yahoo data (prices, company info, fitted regime models),
+# also demo_data/cache/.
+cache/
+
+# Claude Code session files (local settings, never part of the project).
+.claude/

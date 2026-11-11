@@ -17,6 +17,7 @@ import pandas as pd
 
 from portfolio import danish
 from shadow_portfolio import read_export, combine, download_close
+import data_cache
 # Paths and file patterns live in settings.py (see BEAT_SNP_DATA_DIR).
 # OUTPUT_FOLDER and DATA_FOLDER are re-exported here for the other scripts.
 from settings import (DATA_FOLDER, OUTPUT_FOLDER, HISTORY_FILES, TRANSACTIONS_FILES,
@@ -126,6 +127,9 @@ def download_prices_dkk(isins, first_day, last_day):
 
     fx = {"DKK": pd.Series(1.0, index=days)}    # 1 DKK = 1 DKK
     needed = {SECURITIES[isin][1] for isin in isins} - {"DKK"}   # only the currencies I hold
+    # Bring every ticker and rate up to date in a few batched requests first.
+    data_cache.prefetch([SECURITIES[i][0] for i in isins]
+                        + [FX_TICKERS[c] for c in sorted(needed) if c in FX_TICKERS], start)
     for currency in sorted(needed):
         if currency not in FX_TICKERS:
             raise SystemExit(f"No exchange-rate ticker for {currency} - add it to FX_TICKERS")

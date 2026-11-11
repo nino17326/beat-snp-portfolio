@@ -9,12 +9,16 @@
 #  Which data it uses (yours or the demo) is decided by settings.py.
 # ============================================================
 
+import json
 import os
 import subprocess
 import sys
 import time
+from datetime import datetime
 
-from settings import CODE_FOLDER, where
+from settings import CODE_FOLDER, OUTPUT_FOLDER, where
+
+TIMES_FILE = OUTPUT_FOLDER / "run_times.json"     # every run's step times, to compare runs
 
 TRACKER = CODE_FOLDER
 
@@ -51,9 +55,23 @@ def main():
         if error:
             print(f"\n!!! {script} failed: {error} - carrying on with the next step.", flush=True)
 
-    print(f"\n{'=' * 70}\nSummary")
+    # Step times: this run next to the previous one (e.g. before/after the data cache).
+    try:
+        history = json.loads(TIMES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        history = []
+    last = history[-1] if history else None
+    print(f"\n{'=' * 70}\nSummary" + (f"   (previous run {last['when']} → this run)" if last else ""))
     for script, error, seconds in results:
-        print(f"  {'✅' if error is None else '❌'} {script:<20} {seconds:5.0f} s  {error or ''}")
+        before = f"{last['steps'][script]:5.0f} s →" if last and script in last["steps"] else ""
+        print(f"  {'✅' if error is None else '❌'} {script:<20} {before:>9} {seconds:5.0f} s  {error or ''}")
+    total = sum(sec for _, _, sec in results)
+    before = f"{sum(last['steps'].values()):5.0f} s →" if last else ""
+    print(f"     {'total':<20} {before:>9} {total:5.0f} s")
+    history.append({"when": f"{datetime.now():%Y-%m-%d %H:%M}",
+                    "steps": {script: round(sec, 1) for script, _, sec in results}})
+    OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
+    TIMES_FILE.write_text(json.dumps(history[-50:], indent=1), encoding="utf-8")
     failed = [s for s, e, _ in results if e]
     print("\nAll steps finished." if not failed else f"\n{len(failed)} step(s) failed: {', '.join(failed)}")
     sys.exit(1 if failed else 0)

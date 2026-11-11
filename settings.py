@@ -13,6 +13,7 @@
 #    rules.toml               my rules, holdings map, theses
 #    output\                  everything the scripts write
 #    rules_backup\            dated copies, made before the lookup page edits rules.toml
+#    cache\                   downloaded Yahoo data (data_cache.py)
 #
 #  If BEAT_SNP_DATA_DIR isn't set, everything uses demo_data\ instead
 #  (synthetic files that ship with the project).

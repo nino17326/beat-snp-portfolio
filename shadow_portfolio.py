@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd                       # tables of data ("Excel in Python")
 import matplotlib.pyplot as plt           # drawing charts
 from matplotlib.ticker import FuncFormatter
-import yfinance as yf                     # downloading prices from Yahoo Finance
+import data_cache                         # Yahoo prices, saved locally (see data_cache.py)
 
 # Re-use the Danish number formatter we already wrote in portfolio.py.
 # Python can import from our own files too, as long as they are in
@@ -106,13 +106,14 @@ def download_close(ticker, start, end, adjust_for_dividends=True):
     paid since (fine for a fund that pays none, like SXR8). Use False when
     the dividends are already counted separately as cash.
     """
-    print(f"Downloading {ticker} ...")
-    prices = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=adjust_for_dividends)
-    if prices.empty:
-        raise SystemExit(f"No prices came back for {ticker}. Check your internet connection.")
-    close = prices["Close"]
-    # Yahoo attaches a time zone to each date; we only want the plain date.
-    close.index = close.index.tz_localize(None).normalize()
+    # Comes from the shared cache (data_cache.py): only missing days are
+    # downloaded, and only complete trading days' closes are used.
+    try:
+        close = data_cache.closes(ticker, start, end, adjusted=adjust_for_dividends)
+    except LookupError as e:
+        raise SystemExit(str(e))
+    if close.empty:
+        raise SystemExit(f"No prices for {ticker} between {start:%Y-%m-%d} and {end:%Y-%m-%d}.")
     return close
 
 

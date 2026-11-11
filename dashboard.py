@@ -32,6 +32,7 @@ from portfolio import danish
 from positions import OUTPUT_FOLDER
 from settings import DEMO                    # True = running on the synthetic demo_data
 from scan_core import EXPLAIN, LOOKUP_URL as LOOKUP_PAGE, lookup_link   # shared texts + lookup links
+from data_cache import price_status          # which closes the prices are, offline or not
 
 DASHBOARD = OUTPUT_FOLDER / "dashboard.html"
 STATUS = {"✅": "ok", "⚠️": "warn", "ℹ️": "info", "❌": "bad"}
@@ -340,6 +341,11 @@ def build():
     data_line = " · ".join(f"{name} <strong>{d or 'missing'}</strong>" for name, d in sources)
     if DEMO:
         data_line = '<span class="demo">DEMO DATA - synthetic portfolio</span> ' + data_line
+    # Which closing prices the numbers use (and a warning if Yahoo was unreachable).
+    prices_label, offline = price_status()
+    if prices_label:
+        data_line += (f' · <span class="offline">{html.escape(prices_label)}</span>' if offline
+                      else f" · {html.escape(prices_label)}")
 
     holdings_body = "".join(f"<h3>{html.escape(h)}</h3>{items(lines)}" for h, lines in
                             [section(sections, "Limits"), section(sections, "Returns"),
@@ -445,6 +451,7 @@ header .top {{ display:flex; justify-content:space-between; align-items:flex-sta
 .search button {{ padding:7px 14px; border:0; border-radius:6px; background:var(--info); color:#fff; font:inherit; cursor:pointer; }}
 .search .small {{ flex-basis:100%; }}
 .demo {{ background:#f9a825; color:#3e2c00; font-weight:700; padding:1px 6px; border-radius:4px; margin-right:4px; }}
+.offline {{ color:#b45309; font-weight:600; }}
 @media (max-width: 900px) {{ .grid, .roles {{ grid-template-columns:1fr; }} }}
 </style></head>
 <body>

@@ -14,6 +14,10 @@
 #  Not a trading strategy. It only describes the market's mood.
 # ============================================================
 
+import copy
+import hashlib
+import pickle
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -22,6 +26,12 @@ from matplotlib.patches import Patch
 from portfolio import danish
 from shadow_portfolio import download_close
 from positions import OUTPUT_FOLDER
+import data_cache
+
+# Fitted models are saved here and only refitted when a new month starts.
+# Bump CACHE_VERSION whenever the model or the features change.
+REGIME_CACHE = data_cache.CACHE / "regime"
+CACHE_VERSION = 1
 
 MARKETS = {"^GSPC": "S&P 500", "^SOX": "Semis (SOX)"}
 START = "2000-01-01"
@@ -149,19 +159,67 @@ def load_features(ticker):
 
 # --- Walk-forward ---------------------------------------------
 
-def walk_forward(features):
+def fingerprint(features, before):
+    """A short code for the feature history before a date: if Yahoo's
+    history changes, the saved models no longer match and are refitted."""
+    past = features[features.index < before]
+    # Dates as text + rounded values: independent of how pandas stores the dates.
+    key = past.round(8).set_axis(past.index.strftime("%Y-%m-%d"))
+    return hashlib.sha1(pd.util.hash_pandas_object(key).values.tobytes()).hexdigest()
+
+
+def _load_state(name):
+    """A saved model (or None). The model is stored as its plain numbers,
+    so it loads the same whether regime.py runs as a script or is imported."""
+    try:
+        with open(REGIME_CACHE / f"{name}.pkl", "rb") as f:
+            state = pickle.load(f)
+        if state.get("version") != CACHE_VERSION:
+            return None
+        model = GaussianHMM()
+        model.__dict__.update(state["model"])
+        return {**state, "model": model}
+    except Exception:                          # noqa: BLE001 - unreadable cache = just refit
+        return None
+
+
+def _save_state(name, state):
+    REGIME_CACHE.mkdir(parents=True, exist_ok=True)
+    tmp = REGIME_CACHE / f"{name}.pkl.tmp"
+    plain = {**state, "model": copy.deepcopy(state["model"].__dict__), "version": CACHE_VERSION}
+    with open(tmp, "wb") as f:
+        pickle.dump(plain, f)
+    tmp.replace(REGIME_CACHE / f"{name}.pkl")
+
+
+def walk_forward(features, cache_name=None):
     """Label every day using only the past. Returns a table with the
     probabilities of calm/normal/stressed per day, plus the simple
-    'volatility third' rule for comparison."""
+    'volatility third' rule for comparison.
+    With cache_name, the model fitted for the latest month is saved: the
+    next run reuses it (no refit) until a new month starts, and then only
+    fits the new month(s), starting from the saved model - the same result
+    as fitting everything again."""
     X = features.values
     dates = features.index
     month_starts = list(dates.to_series().groupby(dates.to_period("M")).first())
     model = GaussianHMM()
     pieces = []
+    resume = None
+    state = _load_state(cache_name) if cache_name else None
+    if state and state["last_month"] in month_starts             and state["fingerprint"] == fingerprint(features, state["last_month"]):
+        resume = state["last_month"]
+        model = state["model"]
+        pieces = [state["done"]] if len(state["done"]) else []
+        refits = sum(m > resume for m in month_starts)
+        print(f"  Saved model up to {resume:%Y-%m}: " +
+              (f"fitting {refits} new month(s) only" if refits else "no refit needed (same month)"))
+    elif cache_name:
+        print("  No usable saved model: fitting every month (one-off, ~1 min)")
 
     for i, month_start in enumerate(month_starts):
         past = dates < month_start
-        if past.sum() < MIN_TRAIN_DAYS:
+        if past.sum() < MIN_TRAIN_DAYS or (resume is not None and month_start < resume):
             continue
         next_start = month_starts[i + 1] if i + 1 < len(month_starts) else dates[-1] + pd.Timedelta(days=1)
 
@@ -169,7 +227,8 @@ def walk_forward(features):
         mean, std = X[past].mean(axis=0), X[past].std(axis=0)
         Z = (X - mean) / std
 
-        model.fit(Z[past], max_iter=200 if not model.fitted else 30)
+        if month_start != resume:                         # the saved month is already fitted
+            model.fit(Z[past], max_iter=200 if not model.fitted else 30)
 
         # Label this month's days, running the forward pass up to month end.
         upto = dates < next_start
@@ -182,9 +241,13 @@ def walk_forward(features):
         cuts = np.quantile(X[past, 1], [1 / 3, 2 / 3])
         piece["simple_rule"] = np.array(["low vol", "mid vol", "high vol"])[
             np.digitize(X[upto][in_month, 1], cuts)]
+        if cache_name and month_start == month_starts[-1]:
+            done = pd.concat(pieces) if pieces else piece.iloc[0:0]
+            _save_state(cache_name, {"last_month": month_start, "model": copy.deepcopy(model), "done": done,
+                                     "fingerprint": fingerprint(features, month_start)})
         pieces.append(piece)
 
-        if month_start.month == 1:
+        if month_start.month == 1 and month_start != resume:
             print(f"    walked forward to {month_start:%Y}")
 
     result = pd.concat(pieces)
@@ -247,10 +310,19 @@ def current_regime(ticker):
     Returns (label, probability, date)."""
     _, features = load_features(ticker)
     X, dates = features.values, features.index
-    past = dates < dates[-1].replace(day=1)
+    month = dates[-1].replace(day=1)
+    past = dates < month
     mean, std = X[past].mean(axis=0), X[past].std(axis=0)
-    model = GaussianHMM()
-    model.fit((X[past] - mean) / std)
+    # The fit only uses data before this month, so it is saved and reused
+    # until a new month starts.
+    name = f"current_{ticker.strip('^')}"
+    state = _load_state(name)
+    if state and state["month"] == month and state["fingerprint"] == fingerprint(features, month):
+        model = state["model"]
+    else:
+        model = GaussianHMM()
+        model.fit((X[past] - mean) / std)
+        _save_state(name, {"month": month, "model": model, "fingerprint": fingerprint(features, month)})
     probs = model.filtered_probabilities((X - mean) / std)[-1]
     k = int(np.argmax(probs))
     return LABELS[k], probs[k], dates[-1]
@@ -285,7 +357,7 @@ def main():
         print(f"\n=== {name} ({ticker}) ===")
         close, features = load_features(ticker)
         print("  Walking forward (refit every month on past data only) ...")
-        regimes = walk_forward(features)
+        regimes = walk_forward(features, cache_name=f"walk_{ticker.strip('^')}")
         nxt = what_happened_next(close)
 
         hmm = test_table(regimes["regime"], nxt)

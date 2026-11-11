@@ -318,7 +318,9 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Exchange", info["exchange"] or "?")
 c2.metric("Currency", info["currency"] or "?")
 c3.metric("Type", "ETF" if info["quote_type"] == "ETF" else "Stock")
-st.caption(f"Yahoo sector / industry: {info['sector'] or '-'} / {info['industry'] or '-'}")
+st.caption(f"Yahoo sector / industry: {info['sector'] or '-'} / {info['industry'] or '-'}"
+           + (f" · last complete close {info['closes'].index[-1]:%Y-%m-%d} (not intraday)"
+              if len(info["closes"]) else ""))
 
 listed = already_listed(rules, ticker)
 if listed:

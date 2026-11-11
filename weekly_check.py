@@ -20,7 +20,7 @@ import tomllib                       # built into Python 3.11+: reads .toml file
 from datetime import date
 
 import pandas as pd
-import yfinance as yf
+import data_cache                       # Yahoo data, saved locally (see data_cache.py)
 
 from portfolio import danish
 from shadow_portfolio import download_close, signed
@@ -169,10 +169,7 @@ def valuation(ticker):
     PEG          = P/E divided by the expected earnings growth rate
                    (around 1 = growth is "fairly" priced, higher = pricier)
     """
-    try:
-        info = yf.Ticker(ticker).info          # a big dictionary of facts about the stock
-    except Exception:
-        info = {}                              # no internet / Yahoo hiccup: show n/a
+    info = data_cache.info(ticker)             # facts about the stock, refreshed once a day ({} if offline)
 
     def show(key):
         value = info.get(key)
@@ -187,10 +184,8 @@ def estimate_changes(ticker):
     """Analysts' consensus EPS estimate changes as numbers (None = unknown).
     '0y' = the current fiscal year, '+1y' = next fiscal year.
     Also used by scanner.py for its 'revisions' score."""
-    try:
-        stock = yf.Ticker(ticker)
-        trend, revisions = stock.eps_trend, stock.eps_revisions
-    except Exception:
+    trend, revisions = data_cache.estimates(ticker)      # refreshed once a day
+    if trend is None:
         return None
 
     def change(period, days):
@@ -316,11 +311,7 @@ def check_scanner(today):
 
 def next_earnings(ticker):
     """Earnings dates Yahoo knows for a stock (funds have none)."""
-    try:
-        dates = yf.Ticker(ticker).calendar.get("Earnings Date") or []
-    except Exception:
-        dates = []                         # Yahoo hiccup: just skip this stock
-    return [pd.Timestamp(d) for d in dates]
+    return data_cache.earnings_dates(ticker)     # once a day; [] if unknown / offline
 
 
 def upcoming_events(rules, held, today):
@@ -655,6 +646,9 @@ def main():
     ]
     if "WARNING" in captured.getvalue():
         lines.append(item(False, "Data check warning - run positions.py for details"))
+    prices_label, offline = data_cache.price_status()
+    if offline:
+        lines.append(f"- {prices_label} - Yahoo couldn't be reached, so saved prices were used")
     lines += action_lines(portfolio, actions)
     lines += check_weights(rules, values, cash_now)
     lines += check_returns(relative)
