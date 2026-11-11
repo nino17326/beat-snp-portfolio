@@ -22,9 +22,22 @@ import pandas as pd
 
 from portfolio import danish
 from positions import SECURITIES, OUTPUT_FOLDER
-from scan_core import (PASS, FAIL, INFO, SKIP, PAUSE_SECONDS, GATE_ORDER, EARNINGS_GROWTH_CAP,
+from scan_core import (PASS, FAIL, INFO, SKIP, PAUSE_SECONDS, GATE_ORDER, EARNINGS_GROWTH_CAP, EXPLAIN,
                        load_rules, load_context, portfolio_weekly, fetch, fx_to_dkk, run_gates,
-                       verdict, fit_for, raw_factors, score_role, score_text, eligible_candidates)
+                       verdict, fit_for, raw_factors, score_role, score_text, eligible_candidates,
+                       lookup_link)
+
+
+def ask_param(ask_ok):
+    """rules.toml ask_ok -> the lookup page's ask= parameter."""
+    return {True: "yes", False: "no"}.get(ask_ok)
+
+
+def explain_link(ticker, role, ask_ok=None, out=None):
+    """Markdown link to the full explained fit check on the lookup page."""
+    url = lookup_link(ticker, role=role, ask=ask_param(ask_ok),
+                      mode="replace" if out else None, out=out)
+    return f"[{EXPLAIN['fit_link']}]({url})"
 
 
 def swaps_done_this_quarter(t, today, core_ticker):
@@ -123,8 +136,10 @@ def save_markdown(table, order, today, path, extra=()):
     lines = [f"# Scanner {today:%Y-%m-%d}",
              "",
              "Information only - never a buy instruction. "
-             "✅ pass · ❌ fail · ℹ️ no data / not checked · – not applicable. "
-             "`*` = some data missing (see notes); a starred score left out a missing factor.",
+             f"{EXPLAIN['legend']} · – not applicable. "
+             "`*` = some data missing (see notes); a starred score left out a missing factor. "
+             "Fit is the short summary; 'explain' opens the full explained fit check on the lookup page "
+             "(start it with 'Start lookup.bat').",
              "",
              "| Ticker | Name | Role | Sector / industry | Cap bn EUR | DKK/share | "
              + " | ".join(order) + " | Fit | Score | Verdict | Notes |",
@@ -134,7 +149,8 @@ def save_markdown(table, order, today, path, extra=()):
         price = "" if pd.isna(r["price_dkk"]) else danish(r["price_dkk"], 0)
         notes = [f"{g}: {r[g + '_reason']}" for g in order if r[g] in (FAIL, INFO) and g != "ASK"]
         if r["Fit"] != SKIP:
-            notes.append(f"Fit: {r['Fit_reason']} · {r['fit_details']}")
+            notes.append(f"Fit: {r['Fit_reason']} · {r['fit_details']} · "
+                         + explain_link(r["ticker"], r["role"], r["ask_ok"]))
         lines.append(f"| {r['ticker']} | {r['name']} | {r['role']} | {r['sector_industry']} | {cap} | {price} | "
                      + " | ".join(r[g] for g in order)
                      + f" | {r['Fit']} | {score_text(r['score'], r['star'])} | {r['verdict']} | {'; '.join(notes)} |")
@@ -240,7 +256,8 @@ def main():
                "score": scores.get(c["ticker"], float("nan")),
                "star": bool(stars.get(c["ticker"], False)),
                "verdict": result,
-               "Fit": fit, "Fit_reason": fit_reason, "fit_details": fit_details}
+               "Fit": fit, "Fit_reason": fit_reason, "fit_details": fit_details,
+               "ask_ok": c.get("ask_ok", "unknown")}
         for gate in order:
             sym, reason = gates.get(gate, (SKIP, "not checked"))
             row[gate] = sym
@@ -260,6 +277,7 @@ def main():
                               "gates": "".join(gates.get(g, (SKIP, ""))[0] for g in order),
                               "verdict": result, "problems": problems,
                               "fit": fit[0], "fit_reason": fit[1],
+                              "explain": lookup_link(c["ticker"], role=c["role"], ask=ask_param(c.get("ask_ok"))),
                               "thesis": c.get("thesis", ""), "kill_rule": c.get("kill_rule", ""),
                               "added": str(c.get("added", ""))})
 
@@ -321,12 +339,21 @@ def main():
 
     watch_md = (["", "## Watchlist (gates and fit only, not ranked)", ""]
                 + [f"- {INFO} {w['ticker']} ({w['role']}): {w['gates']} {w['verdict']} · fit {w['fit']} "
-                   f"{w['fit_reason']}" for w in watch_results]) if watch_results else []
+                   f"{w['fit_reason']} · [{EXPLAIN['fit_link']}]({w['explain']})" for w in watch_results]
+                if watch_results else [])
+    # Swap lines get a link to the head-to-head comparison (replace mode).
+    asks = {c["ticker"]: c.get("ask_ok") for c in universe}
+    verdicts_md = []
+    for v in verdicts:
+        m = re.search(r"swap worth considering: (\S+) in, (\S+) out", v)
+        role = v.split(":")[0]
+        verdicts_md.append(v + (" · " + explain_link(m.group(1), role, asks.get(m.group(1)), out=m.group(2))
+                                if m else ""))
     path = OUTPUT_FOLDER / "scanner" / f"{today:%Y-%m-%d}.md"
     save_markdown(table, order, today, path,
                   extra=["## Scores", ""] + [f"- {x}" for x in ranking]
                         + ["", f"## One in, one out (swaps left this quarter: {swaps_left})", ""]
-                        + [f"- {INFO} {x}" for x in verdicts] + watch_md)
+                        + [f"- {INFO} {x}" for x in verdicts_md] + watch_md)
     save_latest(table, holdings, verdicts, swaps_left, today, watch_results)
     print(f"\n{summary_line(table).strip('*')}")
     print(f"Report saved to: {path}")

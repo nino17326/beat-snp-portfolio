@@ -31,6 +31,7 @@ from plotly.subplots import make_subplots
 from portfolio import danish
 from positions import OUTPUT_FOLDER
 from settings import DEMO                    # True = running on the synthetic demo_data
+from scan_core import EXPLAIN, LOOKUP_URL as LOOKUP_PAGE, lookup_link   # shared texts + lookup links
 
 DASHBOARD = OUTPUT_FOLDER / "dashboard.html"
 STATUS = {"✅": "ok", "⚠️": "warn", "ℹ️": "info", "❌": "bad"}
@@ -239,7 +240,8 @@ def scanner_body(scan):
     parts = []
     for role, r in scan["roles"].items():
         top = "".join(f"<li class='item info'><span class='sym'>{i}.</span>"
-                      f"<span>{html.escape(tk)} <strong>{html.escape(score)}</strong></span></li>"
+                      f"<span>{html.escape(tk)} <strong>{html.escape(score)}</strong>"
+                      f"{explain_a(lookup_link(tk, role=role))}</span></li>"
                       for i, (tk, score) in enumerate(r["top"], start=1)) or "<li>none eligible</li>"
         weak = (f"{html.escape(r['weakest'][0])} <strong>{html.escape(r['weakest'][1])}</strong>"
                 if r["weakest"] else "n/a")
@@ -249,12 +251,22 @@ def scanner_body(scan):
                      f'<p class="note">My weakest: {weak}</p>'
                      f'<p class="note muted">Not scored (ETF / missing data): {html.escape(unscored)}</p></div>')
     verdicts = items([f"- ℹ️ {v}" for v in scan["verdicts"]])
+    # A flagged swap links to the head-to-head comparison (lookup, replace mode).
+    for sw in scan.get("swaps", []):
+        verdicts += (f'<p class="note">{html.escape(sw["in"])} in, {html.escape(sw["out"])} out:'
+                     + explain_a(lookup_link(sw["in"], mode="replace", out=sw["out"])) + "</p>")
     return (f'<div class="roles">{"".join(parts)}</div><h3>One in, one out '
             f'(swaps left this quarter: {scan["swaps_left"]})</h3>{verdicts}'
-            '<p class="note muted">Information only - never a buy instruction.</p>')
+            f'<p class="note muted">{html.escape(EXPLAIN["legend"])}. Information only - never a buy instruction.</p>')
 
 
-LOOKUP_URL = "http://localhost:8501/?ticker="     # the lookup page (lookup.py, via 'Start lookup.bat')
+LOOKUP_URL = LOOKUP_PAGE + "?ticker="     # the lookup page (lookup.py, via 'Start lookup.bat')
+
+
+def explain_a(url):
+    """A small 'explain' link to the full explained fit check on the lookup page."""
+    return (f" <a class='small' href='{html.escape(url)}' target='_blank' "
+            f"title='{html.escape(EXPLAIN['fit_short_help'])}'>{EXPLAIN['fit_link']}</a>")
 
 
 def watchlist_body(scan):
@@ -266,10 +278,13 @@ def watchlist_body(scan):
     rows = "".join(
         f"<tr><td><a href='{LOOKUP_URL}{html.escape(w['ticker'])}' target='_blank'>{html.escape(w['ticker'])}</a></td>"
         f"<td>{html.escape(w['role'])}</td><td>{html.escape(w['gates'])}</td><td>{html.escape(w['verdict'])}</td>"
-        f"<td>{html.escape(w['fit'])} {html.escape(w['fit_reason'])}</td>"
+        f"<td>{html.escape(w['fit'])} {html.escape(w['fit_reason'])}"
+        f"{explain_a(w.get('explain') or lookup_link(w['ticker'], role=w['role']))}</td>"
         f"<td class='small'>{html.escape(w.get('thesis', ''))}</td></tr>" for w in names)
     return ("<table><tr><td><strong>Ticker</strong></td><td><strong>Role</strong></td><td><strong>Gates</strong></td>"
-            "<td><strong>Verdict</strong></td><td><strong>Fit</strong></td><td><strong>Thesis</strong></td></tr>"
+            "<td><strong>Verdict</strong></td>"
+            f"<td title='{html.escape(EXPLAIN['fit_short_help'])}'><strong>Fit</strong></td>"
+            "<td><strong>Thesis</strong></td></tr>"
             f"{rows}</table><p class='note muted'>Gates and fit only - watchlist names are never ranked.</p>")
 
 

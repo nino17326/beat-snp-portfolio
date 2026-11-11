@@ -74,7 +74,7 @@ With no setup it runs on **`demo_data\`**: a synthetic portfolio (CSPX plus 5 st
 4. Copy `.env.example` to `.env` and set `BEAT_SNP_DATA_DIR=` to that folder.
 5. Run `py run_all.py`. Everything the scripts write goes to `output\` inside your data folder.
 
-To look up a single ticker, double-click `Start lookup.bat` and use the search box on the dashboard. "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
+To look up a single ticker, double-click `Start lookup.bat` and use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
 
 `.env`, CSVs, your `rules.toml`, `output\` and `rules_backup\` are all in `.gitignore`.
 
