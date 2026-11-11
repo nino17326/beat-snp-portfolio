@@ -31,3 +31,6 @@ cache/
 
 # Claude Code session files (local settings, never part of the project).
 .claude/
+
+# Test tool caches.
+.pytest_cache/

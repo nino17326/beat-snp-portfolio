@@ -56,44 +56,64 @@ Python 3.11+ · pandas · numpy · yfinance (prices, FX, estimates) · matplotli
 
 ## How to run it
 
+### First time
+
 ```
 py -m pip install -r requirements.txt
-py run_all.py
+py check_setup.py
 ```
 
-With no setup it runs on **`demo_data\`**: a synthetic portfolio (CSPX plus 5 stocks over 18 months, with deposits, buys, one sale and dividends) in Nordnet's exact file format. The trades are made up, but the prices and dividends are real, so the numbers behave like a real account. `tools\make_demo_data.py` rebuilds it.
+`check_setup.py` checks Python, the packages (pinned in `requirements.txt`), `.env`, the data folder, the Nordnet files and `rules.toml`, and prints ✅ or ❌ with a fix for each.
+
+With no further setup everything runs on **`demo_data\`**: a synthetic portfolio (CSPX plus 5 stocks over 18 months, with deposits, buys, one sale and dividends) in Nordnet's exact file format. The trades are made up, but the prices and dividends are real, so the numbers behave like a real account. `tools\make_demo_data.py` rebuilds it.
+
+### Every day: the desktop icon
+
+Double-click `install_shortcut.bat` once. It puts a **Portfolio** icon on your Desktop (it works out every path from where this folder is, so it works on any PC; run it again if you move the folder).
+
+Double-clicking **Portfolio**:
+
+- opens the dashboard straight away if today's update has already run;
+- otherwise shows a small window, "Updating your portfolio…", with the current step, runs everything and then opens the dashboard;
+- hold **Shift** while starting it to force an update;
+- if an update is already running (a double double-click, or the Monday task), it says "Already updating" and waits for that one instead of starting a second;
+- if something fails, the other steps still run, the top of the dashboard says which step failed and when its data was last good, and a setup check window says what to fix if the setup is the cause.
+
+The lookup page starts by itself, hidden, with every update (`Start lookup.bat` / `Stop lookup.bat` start and stop it by hand). It uses port 8501, or the next free port if something else has 8501, and the dashboard's search box follows it. If it isn't running, the search box says "Lookup isn't running: click the Portfolio icon again".
+
+`install_weekly_update.bat` adds a Windows task that updates every Monday at 07:30 (catching up as soon as possible if the PC was off) and shows a notification: "Portfolio updated: N items need attention". `remove_weekly_update.bat` removes it.
+
+From a terminal, `py run_all.py` does the same update (`--no-open` skips opening the dashboard).
 
 ### With your own data
 
 1. Make a folder anywhere, e.g. `C:\Users\me\Documents\portfolio-data`.
 2. Put your Nordnet exports in it. Files are found by name, so the account number in the file name doesn't matter:
-   - `Daglig udvikling*.csv`
-   - `transactions*.csv`
+   - `Daglig udvikling*.csv` (several are combined; they may overlap)
+   - `transactions*.csv` (the newest is used; each export holds the full history)
    - `Aktietabel*.csv`
 3. Copy `demo_data\rules.toml` into that folder and edit it: your limits, your theses, and under `[securities]` the Yahoo ticker for every ISIN in your transactions.
 4. Copy `.env.example` to `.env` and set `BEAT_SNP_DATA_DIR=` to that folder.
-5. Run `py run_all.py`. Everything the scripts write goes to `output\` inside your data folder.
+5. Run `py check_setup.py`, then use the Portfolio icon (or `py run_all.py`).
 
-### One click
+Everything the tracker writes stays inside your data folder: `output\` (dashboard, reports, `run.log` with the last 10 runs, the lookup's port, process ID and log), `cache\` (downloaded Yahoo data) and `rules_backup\`. `.env`, CSVs, your `rules.toml`, `output\`, `cache\` and `rules_backup\` are all in `.gitignore`.
 
-Run `install_shortcut.bat` once: it puts a **Portfolio** icon on your Desktop. Double-clicking it opens the dashboard straight away if today's data is already there; otherwise a small window shows "Updating your portfolio…" with the current step, and the dashboard opens when it's done (hold Shift while starting it to force an update). Only one update ever runs at a time, a failed step is shown at the top of the dashboard with the time its data was last good, and `outputun.log` keeps a timestamped log of the last 10 runs. `install_weekly_update.bat` adds a Windows task that updates every Monday at 07:30 (catching up if the PC was off) and shows a notification; `remove_weekly_update.bat` removes it.
+### Looking up a ticker
 
-The lookup page starts by itself, hidden, at the end of every update (`Start lookup.bat` / `Stop lookup.bat` do it by hand). It uses port 8501, or the next free port if something else has 8501, and the dashboard's search box follows it.
+Use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
 
-To look up a single ticker, use the search box on the dashboard. The lookup has two modes: "New idea" (compared with the weakest satellite in the same role) or "Replace a holding" (head-to-head with a holding you pick). Either way it shows a side-by-side factor comparison, a plain-English fit check against every portfolio rule, and a three-part verdict (score, the deciding factors, and what the numbers can't tell you). "Add to watchlist" and "Add to scanner group" first save a dated backup of `rules.toml` in `rules_backup\`, then add only the new lines.
+### What keeps it fast and safe
 
-All Yahoo data (prices, FX, company info, estimates) goes through `data_cache.py` and is saved in `cache\` in the data folder: a run only downloads the days that are missing, company data refreshes once a day, and if Yahoo is unreachable the saved prices are used and the dashboard says so.
-
-Before anything runs, `checks.py` validates `rules.toml` (missing sections, wrong types such as `"true"` in quotes, ticker endings, duplicates) and stops with the line number and the fix, and it checks the exports: new holdings that aren't set up, older transaction exports, duplicate or stale files. Every output and every `rules.toml` edit is written to a temporary file first and then swapped in, so a crash can't leave a half-written file.
-
-`.env`, CSVs, your `rules.toml`, `output\`, `cache\` and `rules_backup\` are all in `.gitignore`.
+- **Data cache:** all Yahoo data (prices, FX, company info, estimates) goes through `data_cache.py` and is saved in `cache\`. A run only downloads the days that are missing, company data refreshes once a day, only finished trading days' closes are used, and if Yahoo is unreachable the saved prices are used and the dashboard says so. The market-regime model is only refitted when a new month starts. A full update went from about 205 s to about 22 s.
+- **Checks first:** before anything runs, `checks.py` validates `rules.toml` (missing sections, wrong types such as `"true"` in quotes, ticker endings, duplicates) and stops with the line number and the fix. It also checks the exports: new holdings that aren't set up, older transaction exports, duplicate or stale files.
+- **Safe writing:** every output and every `rules.toml` edit is written to a temporary file first and then swapped in, so a crash can't leave a half-written file.
+- **Tests:** `py -m pytest` runs the whole update on a copy of the demo data and checks that it completes, builds the dashboard, and that the shadow-portfolio numbers and the time-weighted return match known values (about 30 seconds).
 
 ## What I'd do next
 
 - Generalise the "semiconductors" concentration group into any number of named groups, each with its own money and risk caps.
 - A decision log: record each action-panel decision and score the rules against what I actually did.
-- Run `run_all.py` automatically every Monday and post a short summary.
-- Unit tests for the rebuild and the time-weighted return, using the demo data as fixtures.
+- Unit tests for the account rebuild itself (the smoke test covers the end result).
 - Support more brokers' export formats.
 
 ## My results
